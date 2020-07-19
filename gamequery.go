@@ -8,7 +8,7 @@ import (
 )
 
 var helpers = map[string]reflect.Type{
-	"udp": reflect.TypeOf(&protocols.UDPHelper{}),
+	"udp": reflect.TypeOf(protocols.UDPHelper{}),
 }
 
 var queryProtocols = []protocols.Protocol{
@@ -48,11 +48,7 @@ func Query(req protocols.Request) (protocols.Response, error) {
 		return protocols.Response{}, errors.New("unknown helper required for requested protocol")
 	}
 
-	// TODO: Should be a reference to the network type
-	// networkHelper := reflect.New(networkType).Elem().Interface().(protocols.NetworkHelper)
-	// fmt.Println(networkHelper, networkType)
-
-	networkHelper := &protocols.UDPHelper{}
+	networkHelper := reflect.New(networkType).Interface().(protocols.NetworkHelper)
 	if err := networkHelper.Initialize(req.IP, port, timeout); err != nil {
 		return protocols.Response{}, err
 	}
