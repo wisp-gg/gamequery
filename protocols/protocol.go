@@ -2,13 +2,6 @@ package protocols
 
 import "time"
 
-type Request struct {
-	Game    string
-	IP      string
-	Port    *uint16
-	Timeout *time.Duration
-}
-
 type Response struct {
 	// TODO: Decide the structure of this
 
@@ -18,7 +11,7 @@ type Response struct {
 type NetworkHelper interface {
 	Initialize(ip string, port uint16, timeout time.Duration) error
 	Send(data []byte) error
-	Receive(size uint16) (Packet, error)
+	Receive() (Packet, error)
 	Close() error
 }
 

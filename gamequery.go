@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+type Request struct {
+	Game    string
+	IP      string
+	Port    uint16
+	Timeout *time.Duration
+}
+
 var helpers = map[string]reflect.Type{
 	"udp": reflect.TypeOf(protocols.UDPHelper{}),
 }
@@ -27,15 +34,15 @@ func findProtocol(name string) (protocols.Protocol, error) {
 	return nil, errors.New("could not find protocol for the game") // TODO: Should be easily checkable
 }
 
-func Query(req protocols.Request) (protocols.Response, error) {
+func Query(req Request) (protocols.Response, error) {
 	queryProtocol, err := findProtocol(req.Game)
 	if err != nil {
 		return protocols.Response{}, err
 	}
 
 	var port = queryProtocol.DefaultPort()
-	if req.Port != nil {
-		port = *req.Port
+	if req.Port != 0 {
+		port = req.Port
 	}
 
 	var timeout = 5 * time.Second

@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+const (
+	bufSize = 2048
+)
+
 type UDPHelper struct {
 	conn    net.Conn
 	timeout time.Duration
@@ -41,20 +45,20 @@ func (helper *UDPHelper) Send(data []byte) error {
 	return nil
 }
 
-func (helper *UDPHelper) Receive(size uint16) (Packet, error) {
+func (helper *UDPHelper) Receive() (Packet, error) {
 	err := helper.conn.SetReadDeadline(helper.getTimeout())
 	if err != nil {
 		return Packet{}, err
 	}
 
-	buffer := make([]byte, size)
-	_, err = helper.conn.Read(buffer)
+	recvBuffer := make([]byte, bufSize)
+	recvSize, err := helper.conn.Read(recvBuffer)
 	if err != nil {
 		return Packet{}, err
 	}
 
 	packet := Packet{}
-	packet.SetBuffer(buffer)
+	packet.SetBuffer(recvBuffer[:recvSize])
 
 	return packet, nil
 }
