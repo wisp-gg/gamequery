@@ -20,6 +20,7 @@ var helpers = map[string]reflect.Type{
 
 var queryProtocols = []protocols.Protocol{
 	protocols.SourceQuery{},
+	protocols.MinecraftUDP{},
 }
 
 func findProtocol(name string) (protocols.Protocol, error) {

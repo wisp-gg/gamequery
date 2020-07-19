@@ -5,6 +5,8 @@ import "encoding/binary"
 type Packet struct {
 	buffer []byte
 	pos    int
+
+	order binary.ByteOrder
 }
 
 func (p *Packet) WriteRaw(bytes ...byte) {
@@ -13,12 +15,19 @@ func (p *Packet) WriteRaw(bytes ...byte) {
 	}
 }
 
+func (p *Packet) WriteInt32(int int32) {
+	buf := make([]byte, 4)
+	p.order.PutUint32(buf, uint32(int))
+
+	p.WriteRaw(buf...)
+}
+
 func (p *Packet) WriteString(str string) {
 	p.WriteRaw([]byte(str)...)
 }
 
 func (p *Packet) ReadInt32() int32 {
-	r := int32(binary.LittleEndian.Uint32(p.buffer[p.pos : p.pos+4]))
+	r := int32(p.order.Uint32(p.buffer[p.pos : p.pos+4]))
 	p.pos += 4
 
 	return r
@@ -32,14 +41,14 @@ func (p *Packet) ReadUint8() uint8 {
 }
 
 func (p *Packet) ReadUint16() uint16 {
-	r := binary.LittleEndian.Uint16(p.buffer[p.pos : p.pos+2])
+	r := p.order.Uint16(p.buffer[p.pos : p.pos+2])
 	p.pos += 2
 
 	return r
 }
 
 func (p *Packet) ReadUint64() uint64 {
-	r := binary.LittleEndian.Uint64(p.buffer[p.pos : p.pos+8])
+	r := p.order.Uint64(p.buffer[p.pos : p.pos+8])
 	p.pos += 8
 
 	return r
@@ -65,12 +74,25 @@ func (p *Packet) ReachedEnd() bool {
 	return p.pos >= len(p.buffer)
 }
 
+func (p *Packet) SetOrder(order binary.ByteOrder) {
+	p.order = order
+}
+
 func (p *Packet) SetBuffer(buffer []byte) {
 	p.buffer = buffer
 }
 
 func (p *Packet) GetBuffer() []byte {
 	return p.buffer
+}
+
+func (p *Packet) Forward(count int) {
+	p.pos += count
+}
+
+func (p *Packet) Clear() {
+	p.pos = 0
+	p.buffer = make([]byte, 0)
 }
 
 func (p *Packet) AsString() string {

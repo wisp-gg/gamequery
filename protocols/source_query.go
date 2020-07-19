@@ -1,6 +1,7 @@
 package protocols
 
 import (
+	"encoding/binary"
 	"errors"
 )
 
@@ -65,6 +66,8 @@ func (sq SourceQuery) Execute(helper NetworkHelper) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
+
+	packet.SetOrder(binary.LittleEndian)
 
 	if packet.ReadInt32() != -1 {
 		return Response{}, errors.New("received packet's header indicates that it was split")
