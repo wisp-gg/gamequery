@@ -1,6 +1,8 @@
 package protocols
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+)
 
 type Packet struct {
 	buffer []byte
@@ -20,6 +22,37 @@ func (p *Packet) WriteInt32(int int32) {
 	p.order.PutUint32(buf, uint32(int))
 
 	p.WriteRaw(buf...)
+}
+
+func (p *Packet) WriteUint8(int uint8) {
+	p.WriteRaw(int)
+}
+
+func (p *Packet) WriteUint16(int uint16) {
+	buf := make([]byte, 2)
+	p.order.PutUint16(buf, uint16(int))
+
+	p.WriteRaw(buf...)
+}
+
+func (p *Packet) WriteVarint(num int) {
+	res := make([]byte, 0)
+	for {
+		b := num & 0x7F
+		num >>= 7
+
+		if num != 0 {
+			b |= 0x80
+		}
+
+		res = append(res, byte(b))
+
+		if num == 0 {
+			break
+		}
+	}
+
+	p.WriteRaw(res...)
 }
 
 func (p *Packet) WriteString(str string) {
@@ -54,10 +87,24 @@ func (p *Packet) ReadUint64() uint64 {
 	return r
 }
 
+func (p *Packet) ReadVarint() int {
+	var varint = 0
+	for i := 0; i <= 5; i++ {
+		nextByte := p.ReadUint8()
+		varint |= (int(nextByte) & 0x7F) << (7 * i)
+
+		if (nextByte & 0x80) == 0 {
+			break
+		}
+	}
+
+	return varint
+}
+
 func (p *Packet) ReadString() string {
 	start := p.pos
 	for {
-		if p.buffer[p.pos] == 0x00 {
+		if p.ReachedEnd() || p.buffer[p.pos] == 0x00 {
 			break
 		}
 
@@ -93,6 +140,10 @@ func (p *Packet) Forward(count int) {
 func (p *Packet) Clear() {
 	p.pos = 0
 	p.buffer = make([]byte, 0)
+}
+
+func (p *Packet) Length() int {
+	return len(p.buffer)
 }
 
 func (p *Packet) AsString() string {

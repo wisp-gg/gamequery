@@ -28,6 +28,7 @@ type MinecraftUDPRaw struct {
 func (mc MinecraftUDP) Names() []string {
 	return []string{
 		"minecraft",
+		"minecraft_udp",
 	}
 }
 
@@ -35,7 +36,11 @@ func (mc MinecraftUDP) DefaultPort() uint16 {
 	return 25565
 }
 
-func (mc MinecraftUDP) Helper() string {
+func (mc MinecraftUDP) Priority() uint16 {
+	return 10
+}
+
+func (mc MinecraftUDP) Network() string {
 	return "udp"
 }
 
@@ -60,7 +65,7 @@ func parseChallengeToken(challengeToken string) ([]byte, error) {
 	return buf.Bytes()[buf.Len()-4:], nil
 }
 
-func (mc MinecraftUDP) Execute(helper NetworkHelper) (Response, error) { // TODO: Should fallback to TCP version of this
+func (mc MinecraftUDP) Execute(helper NetworkHelper) (Response, error) {
 	sessionId := generateSessionID()
 
 	packet := Packet{}

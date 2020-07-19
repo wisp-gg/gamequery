@@ -7,31 +7,35 @@ import (
 )
 
 const (
-	bufSize = 2048
+	readBufSize = 2048
 )
 
-type UDPHelper struct {
+type NetworkHelper struct {
+	ip      string
+	port    uint16
 	conn    net.Conn
 	timeout time.Duration
 }
 
-func (helper *UDPHelper) Initialize(ip string, port uint16, timeout time.Duration) error {
-	conn, err := net.DialTimeout("udp", fmt.Sprintf("%s:%d", ip, port), timeout)
+func (helper *NetworkHelper) Initialize(protocol string, ip string, port uint16, timeout time.Duration) error {
+	conn, err := net.DialTimeout(protocol, fmt.Sprintf("%s:%d", ip, port), timeout)
 	if err != nil {
 		return err
 	}
 
+	helper.ip = ip
+	helper.port = port
 	helper.conn = conn
 	helper.timeout = timeout
 
 	return nil
 }
 
-func (helper *UDPHelper) getTimeout() time.Time {
+func (helper *NetworkHelper) getTimeout() time.Time {
 	return time.Now().Add(helper.timeout)
 }
 
-func (helper *UDPHelper) Send(data []byte) error {
+func (helper *NetworkHelper) Send(data []byte) error {
 	err := helper.conn.SetWriteDeadline(helper.getTimeout())
 	if err != nil {
 		return err
@@ -45,13 +49,13 @@ func (helper *UDPHelper) Send(data []byte) error {
 	return nil
 }
 
-func (helper *UDPHelper) Receive() (Packet, error) {
+func (helper *NetworkHelper) Receive() (Packet, error) {
 	err := helper.conn.SetReadDeadline(helper.getTimeout())
 	if err != nil {
 		return Packet{}, err
 	}
 
-	recvBuffer := make([]byte, bufSize)
+	recvBuffer := make([]byte, readBufSize)
 	recvSize, err := helper.conn.Read(recvBuffer)
 	if err != nil {
 		return Packet{}, err
@@ -63,6 +67,14 @@ func (helper *UDPHelper) Receive() (Packet, error) {
 	return packet, nil
 }
 
-func (helper *UDPHelper) Close() error {
+func (helper *NetworkHelper) Close() error {
 	return helper.conn.Close()
+}
+
+func (helper *NetworkHelper) GetIP() string {
+	return helper.ip
+}
+
+func (helper *NetworkHelper) GetPort() uint16 {
+	return helper.port
 }

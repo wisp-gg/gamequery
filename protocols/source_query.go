@@ -48,7 +48,11 @@ func (sq SourceQuery) DefaultPort() uint16 {
 	return 27015
 }
 
-func (sq SourceQuery) Helper() string {
+func (sq SourceQuery) Priority() uint16 {
+	return 1
+}
+
+func (sq SourceQuery) Network() string {
 	return "udp"
 }
 

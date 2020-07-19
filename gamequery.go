@@ -3,7 +3,8 @@ package gamequery
 import (
 	"errors"
 	"github.com/wisp-gg/gamequery/protocols"
-	"reflect"
+	"sort"
+	"sync"
 	"time"
 )
 
@@ -14,62 +15,99 @@ type Request struct {
 	Timeout *time.Duration
 }
 
-var helpers = map[string]reflect.Type{
-	"udp": reflect.TypeOf(protocols.UDPHelper{}),
-}
-
 var queryProtocols = []protocols.Protocol{
 	protocols.SourceQuery{},
 	protocols.MinecraftUDP{},
+	protocols.MinecraftTCP{},
 }
 
-func findProtocol(name string) (protocols.Protocol, error) {
-	for _, protocol := range queryProtocols { // TODO: Optimize this to a lookup list?
+func findProtocols(name string) []protocols.Protocol {
+	found := make([]protocols.Protocol, 0)
+	for _, protocol := range queryProtocols {
 		for _, protocolName := range protocol.Names() {
 			if protocolName == name {
-				return protocol, nil
+				found = append(found, protocol)
 			}
 		}
 	}
 
-	return nil, errors.New("could not find protocol for the game") // TODO: Should be easily checkable
+	return found
+}
+
+type queryResult struct {
+	Priority uint16
+	Err      error
+	Response protocols.Response
 }
 
 func Query(req Request) (protocols.Response, error) {
-	queryProtocol, err := findProtocol(req.Game)
-	if err != nil {
-		return protocols.Response{}, err
+	queryProtocols := findProtocols(req.Game)
+	if len(queryProtocols) < 1 {
+		return protocols.Response{}, errors.New("could not find protocols for the game")
 	}
 
-	var port = queryProtocol.DefaultPort()
-	if req.Port != 0 {
-		port = req.Port
+	var wg sync.WaitGroup
+	wg.Add(len(queryProtocols))
+
+	queryResults := make([]queryResult, len(queryProtocols))
+	for index, queryProtocol := range queryProtocols {
+		go func(queryProtocol protocols.Protocol, index int) {
+			defer wg.Done()
+
+			var port = queryProtocol.DefaultPort()
+			if req.Port != 0 {
+				port = req.Port
+			}
+
+			var timeout = 5 * time.Second
+			if req.Timeout != nil {
+				timeout = *req.Timeout
+			}
+
+			networkHelper := protocols.NetworkHelper{}
+			if err := networkHelper.Initialize(queryProtocol.Network(), req.IP, port, timeout); err != nil {
+				queryResults[index] = queryResult{
+					Priority: queryProtocol.Priority(),
+					Err:      err,
+					Response: protocols.Response{},
+				}
+				return
+			}
+			defer networkHelper.Close()
+
+			response, err := queryProtocol.Execute(networkHelper)
+			if err != nil {
+				queryResults[index] = queryResult{
+					Priority: queryProtocol.Priority(),
+					Err:      err,
+					Response: protocols.Response{},
+				}
+				return
+			}
+
+			queryResults[index] = queryResult{
+				Priority: queryProtocol.Priority(),
+				Err:      nil,
+				Response: response,
+			}
+		}(queryProtocol, index)
 	}
 
-	var timeout = 5 * time.Second
-	if req.Timeout != nil {
-		timeout = *req.Timeout
+	wg.Wait() // TODO: Somehow skip waiting for other protocols if we have a response?
+	sort.Slice(queryResults, func(i, j int) bool {
+		return queryResults[i].Priority > queryResults[j].Priority
+	})
+
+	var firstError error
+	for _, result := range queryResults {
+		if result.Err != nil {
+			if firstError == nil {
+				firstError = result.Err
+			}
+		} else {
+			return result.Response, nil
+		}
 	}
 
-	networkType := helpers[queryProtocol.Helper()]
-	if networkType == nil {
-		return protocols.Response{}, errors.New("unknown helper required for requested protocol")
-	}
-
-	networkHelper := reflect.New(networkType).Interface().(protocols.NetworkHelper)
-	if err := networkHelper.Initialize(req.IP, port, timeout); err != nil {
-		return protocols.Response{}, err
-	}
-
-	response, err := queryProtocol.Execute(networkHelper)
-	if err != nil {
-		return protocols.Response{}, err
-	}
-
-	err = networkHelper.Close()
-	if err != nil {
-		return protocols.Response{}, err
-	}
-
-	return response, nil
+	return protocols.Response{}, firstError
 }
