@@ -3,6 +3,7 @@ package protocols
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 )
 
 type SourceQuery struct{}
@@ -56,6 +57,54 @@ func (sq SourceQuery) Network() string {
 	return "udp"
 }
 
+func (sq SourceQuery) handleMultiplePackets(helper NetworkHelper, initialPacket Packet) (Packet, error) {
+	var initial = true
+	var curPacket = initialPacket
+	var packets []Packet
+	for {
+		if !initial {
+			curPacket, err := helper.Receive()
+			if err != nil {
+				return Packet{}, err
+			}
+
+			curPacket.SetOrder(binary.LittleEndian)
+		} else {
+			initial = false
+		}
+
+		if curPacket.ReadInt32() != -2 {
+			return Packet{}, errors.New("received packet isn't part of split response")
+		}
+
+		// For the sake of simplicity, we'll assume that the server is Source based instead of possibly Goldsource.
+		id, total, number, size := curPacket.ReadInt32(), curPacket.ReadInt8(), curPacket.ReadInt8(), curPacket.ReadUint16()
+		compressed := id & 0x80
+
+		if compressed != 0 {
+			decompressedSize, crc32 := curPacket.ReadInt32(), curPacket.ReadInt32()
+			fmt.Println(decompressedSize, crc32)
+
+			// TODO: Handle decompression
+			return Packet{}, errors.New("received packet that is bz2 compressed")
+		}
+
+		packets = append(packets, curPacket)
+		fmt.Println(id, total, number, size, compressed)
+		fmt.Println(len(packets), int(total))
+		if len(packets) == int(total) {
+			break
+		}
+	}
+
+	fmt.Println("Finished reading all the packets!")
+
+	// TODO: Reconstruct the order (by just sorting `packets`)
+	// Then build a new buffer into a Packet{} struct and pass it back.
+
+	return Packet{}, errors.New("unimplemented split response handling (please let me know the server IP so I can implement this)")
+}
+
 func (sq SourceQuery) Execute(helper NetworkHelper) (Response, error) {
 	packet := Packet{}
 	packet.WriteRaw(0xFF, 0xFF, 0xFF, 0xFF, 0x54)
@@ -74,7 +123,12 @@ func (sq SourceQuery) Execute(helper NetworkHelper) (Response, error) {
 	packet.SetOrder(binary.LittleEndian)
 
 	if packet.ReadInt32() != -1 {
-		return Response{}, errors.New("received packet's header indicates that it was split")
+		packet.Forward(-4) // Seek back so we're able to reread the data in handleMultiplePackets
+
+		packet, err = sq.handleMultiplePackets(helper, packet)
+		if err != nil {
+			return Response{}, err
+		}
 	}
 
 	if packet.ReadUint8() != 0x49 {

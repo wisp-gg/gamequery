@@ -40,6 +40,8 @@ type queryResult struct {
 	Response protocols.Response
 }
 
+// TODO: `Detect` method that will allow you to detect the game type based on ip:port only.
+
 func Query(req Request) (protocols.Response, error) {
 	queryProtocols := findProtocols(req.Game)
 	if len(queryProtocols) < 1 {

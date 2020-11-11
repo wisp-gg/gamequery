@@ -60,6 +60,18 @@ func (p *Packet) WriteString(str string) {
 	p.WriteRaw([]byte(str)...)
 }
 
+func (p *Packet) ReadInt8() int8 {
+	if !p.CanRead(1) {
+		p.invalid = true
+		return 0
+	}
+
+	r := int8(p.buffer[p.pos])
+	p.pos += 1
+
+	return r
+}
+
 func (p *Packet) ReadInt32() int32 {
 	if !p.CanRead(4) {
 		p.invalid = true
@@ -144,11 +156,11 @@ func (p *Packet) ReadString() string {
 }
 
 func (p *Packet) CanRead(bytes int) bool {
-	return p.pos+bytes >= p.Length()
+	return p.pos+bytes <= p.Length()
 }
 
 func (p *Packet) ReachedEnd() bool {
-	return p.CanRead(0)
+	return !p.CanRead(0)
 }
 
 func (p *Packet) SetOrder(order binary.ByteOrder) {
