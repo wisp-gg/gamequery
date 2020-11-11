@@ -119,6 +119,10 @@ func (mc MinecraftTCP) Execute(helper NetworkHelper) (Response, error) {
 		return Response{}, err
 	}
 
+	if responsePacket.IsInvalid() {
+		return Response{}, errors.New("received packet is invalid")
+	}
+
 	return Response{
 		Raw: raw,
 	}, nil

@@ -5,8 +5,9 @@ import (
 )
 
 type Packet struct {
-	buffer []byte
-	pos    int
+	buffer  []byte
+	pos     int
+	invalid bool
 
 	order binary.ByteOrder
 }
@@ -60,6 +61,11 @@ func (p *Packet) WriteString(str string) {
 }
 
 func (p *Packet) ReadInt32() int32 {
+	if !p.CanRead(4) {
+		p.invalid = true
+		return 0
+	}
+
 	r := int32(p.order.Uint32(p.buffer[p.pos : p.pos+4]))
 	p.pos += 4
 
@@ -67,6 +73,11 @@ func (p *Packet) ReadInt32() int32 {
 }
 
 func (p *Packet) ReadUint8() uint8 {
+	if !p.CanRead(1) {
+		p.invalid = true
+		return 0
+	}
+
 	r := p.buffer[p.pos]
 	p.pos++
 
@@ -74,6 +85,11 @@ func (p *Packet) ReadUint8() uint8 {
 }
 
 func (p *Packet) ReadUint16() uint16 {
+	if !p.CanRead(2) {
+		p.invalid = true
+		return 0
+	}
+
 	r := p.order.Uint16(p.buffer[p.pos : p.pos+2])
 	p.pos += 2
 
@@ -81,6 +97,11 @@ func (p *Packet) ReadUint16() uint16 {
 }
 
 func (p *Packet) ReadUint64() uint64 {
+	if !p.CanRead(8) {
+		p.invalid = true
+		return 0
+	}
+
 	r := p.order.Uint64(p.buffer[p.pos : p.pos+8])
 	p.pos += 8
 
@@ -102,6 +123,11 @@ func (p *Packet) ReadVarint() int {
 }
 
 func (p *Packet) ReadString() string {
+	if p.ReachedEnd() {
+		p.invalid = true
+		return ""
+	}
+
 	start := p.pos
 	for {
 		if p.ReachedEnd() || p.buffer[p.pos] == 0x00 {
@@ -117,8 +143,12 @@ func (p *Packet) ReadString() string {
 	return string(str)
 }
 
+func (p *Packet) CanRead(bytes int) bool {
+	return p.pos+bytes >= p.Length()
+}
+
 func (p *Packet) ReachedEnd() bool {
-	return p.pos >= len(p.buffer)
+	return p.CanRead(0)
 }
 
 func (p *Packet) SetOrder(order binary.ByteOrder) {
@@ -144,6 +174,10 @@ func (p *Packet) Clear() {
 
 func (p *Packet) Length() int {
 	return len(p.buffer)
+}
+
+func (p *Packet) IsInvalid() bool {
+	return p.invalid
 }
 
 func (p *Packet) AsString() string {

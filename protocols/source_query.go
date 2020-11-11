@@ -131,6 +131,10 @@ func (sq SourceQuery) Execute(helper NetworkHelper) (Response, error) {
 		raw.ExtraData = extraData
 	}
 
+	if packet.IsInvalid() {
+		return Response{}, errors.New("received packet is invalid")
+	}
+
 	return Response{
 		Raw: raw,
 	}, nil

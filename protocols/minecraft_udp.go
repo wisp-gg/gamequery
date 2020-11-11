@@ -171,6 +171,10 @@ func (mc MinecraftUDP) Execute(helper NetworkHelper) (Response, error) {
 		raw.Players = append(raw.Players, playerName)
 	}
 
+	if responsePacket.IsInvalid() {
+		return Response{}, errors.New("received packet is invalid")
+	}
+
 	return Response{
 		Raw: raw,
 	}, nil
