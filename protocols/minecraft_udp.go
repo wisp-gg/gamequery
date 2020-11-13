@@ -25,10 +25,13 @@ type MinecraftUDPRaw struct {
 	Players    []string
 }
 
-func (mc MinecraftUDP) Names() []string {
+func (mc MinecraftUDP) Name() string {
+	return "minecraft_udp"
+}
+
+func (mc MinecraftUDP) Aliases() []string {
 	return []string{
 		"minecraft",
-		"minecraft_udp",
 	}
 }
 

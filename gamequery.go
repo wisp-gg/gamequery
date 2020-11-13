@@ -8,11 +8,12 @@ import (
 	"time"
 )
 
+// Representation of a query request for a specific game server.
 type Request struct {
-	Game    string
-	IP      string
-	Port    uint16
-	Timeout *time.Duration
+	Game    string         // The game protocol to use, can be left out for the `Detect` function.
+	IP      string         // The game server's query IP
+	Port    uint16         // The game server's query port
+	Timeout *time.Duration // Timeout for a single send/receive operation in the game's protocol.
 }
 
 var queryProtocols = []protocols.Protocol{
@@ -24,9 +25,13 @@ var queryProtocols = []protocols.Protocol{
 func findProtocols(name string) []protocols.Protocol {
 	found := make([]protocols.Protocol, 0)
 	for _, protocol := range queryProtocols {
-		for _, protocolName := range protocol.Names() {
-			if protocolName == name {
-				found = append(found, protocol)
+		if protocol.Name() == name {
+			found = append(found, protocol)
+		} else {
+			for _, protocolName := range protocol.Aliases() {
+				if protocolName == name {
+					found = append(found, protocol)
+				}
 			}
 		}
 	}
@@ -35,24 +40,37 @@ func findProtocols(name string) []protocols.Protocol {
 }
 
 type queryResult struct {
+	Name     string
 	Priority uint16
 	Err      error
 	Response protocols.Response
 }
 
-// TODO: `Detect` method that will allow you to detect the game type based on ip:port only.
+// Query the game server by detecting the protocol (trying all available protocols).
+// This usually should be used as the initial query function and then use `Query` function
+// with the returned protocol if the query succeeds. Otherwise each function call will take always
+// <req.Timeout> duration even if the response was received earlier from one of the protocols.
+func Detect(req Request) (protocols.Response, string, error) {
+	return query(req, queryProtocols)
+}
 
+// Query the game server using the protocol provided in req.Game.
 func Query(req Request) (protocols.Response, error) {
-	queryProtocols := findProtocols(req.Game)
-	if len(queryProtocols) < 1 {
+	chosenProtocols := findProtocols(req.Game)
+	if len(chosenProtocols) < 1 {
 		return protocols.Response{}, errors.New("could not find protocols for the game")
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(len(queryProtocols))
+	response, _, err := query(req, chosenProtocols)
+	return response, err
+}
 
-	queryResults := make([]queryResult, len(queryProtocols))
-	for index, queryProtocol := range queryProtocols {
+func query(req Request, chosenProtocols []protocols.Protocol) (protocols.Response, string, error) {
+	var wg sync.WaitGroup
+	wg.Add(len(chosenProtocols))
+
+	queryResults := make([]queryResult, len(chosenProtocols))
+	for index, queryProtocol := range chosenProtocols {
 		go func(queryProtocol protocols.Protocol, index int) {
 			defer wg.Done()
 
@@ -88,6 +106,7 @@ func Query(req Request) (protocols.Response, error) {
 			}
 
 			queryResults[index] = queryResult{
+				Name:     queryProtocol.Name(),
 				Priority: queryProtocol.Priority(),
 				Err:      nil,
 				Response: response,
@@ -95,7 +114,7 @@ func Query(req Request) (protocols.Response, error) {
 		}(queryProtocol, index)
 	}
 
-	wg.Wait() // TODO: Somehow skip waiting for other protocols if we have a response?
+	wg.Wait()
 	sort.Slice(queryResults, func(i, j int) bool {
 		return queryResults[i].Priority > queryResults[j].Priority
 	})
@@ -107,9 +126,9 @@ func Query(req Request) (protocols.Response, error) {
 				firstError = result.Err
 			}
 		} else {
-			return result.Response, nil
+			return result.Response, result.Name, nil
 		}
 	}
 
-	return protocols.Response{}, firstError
+	return protocols.Response{}, "", firstError
 }

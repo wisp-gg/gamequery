@@ -39,10 +39,12 @@ type A2SInfo struct {
 	ExtraData ExtraData
 }
 
-func (sq SourceQuery) Names() []string {
-	return []string{
-		"source",
-	}
+func (sq SourceQuery) Name() string {
+	return "source"
+}
+
+func (sq SourceQuery) Aliases() []string {
+	return []string{}
 }
 
 func (sq SourceQuery) DefaultPort() uint16 {

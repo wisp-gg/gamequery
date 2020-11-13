@@ -36,10 +36,13 @@ type MinecraftTCPRaw struct {
 	Favicon     string
 }
 
-func (mc MinecraftTCP) Names() []string {
+func (mc MinecraftTCP) Name() string {
+	return "minecraft_tcp"
+}
+
+func (mc MinecraftTCP) Aliases() []string {
 	return []string{
 		"minecraft",
-		"minecraft_tcp",
 	}
 }
 

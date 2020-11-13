@@ -7,7 +7,8 @@ type Response struct {
 }
 
 type Protocol interface {
-	Names() []string
+	Name() string
+	Aliases() []string
 	DefaultPort() uint16
 	Priority() uint16
 	Network() string
