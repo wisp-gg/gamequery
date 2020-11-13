@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/wisp-gg/gamequery/api"
+	"github.com/wisp-gg/gamequery/internal"
 )
 
 type MinecraftTCP struct{}
@@ -58,11 +60,11 @@ func (mc MinecraftTCP) Network() string {
 	return "tcp"
 }
 
-func buildMCPacket(bulkData ...interface{}) *Packet {
-	packet := Packet{}
+func buildMCPacket(bulkData ...interface{}) *internal.Packet {
+	packet := internal.Packet{}
 	packet.SetOrder(binary.BigEndian)
 
-	tmpPacket := Packet{}
+	tmpPacket := internal.Packet{}
 	tmpPacket.SetOrder(binary.BigEndian)
 	for _, data := range bulkData {
 		switch val := data.(type) {
@@ -86,26 +88,26 @@ func buildMCPacket(bulkData ...interface{}) *Packet {
 	return &packet
 }
 
-func (mc MinecraftTCP) Execute(helper NetworkHelper) (Response, error) {
+func (mc MinecraftTCP) Execute(helper internal.NetworkHelper) (api.Response, error) {
 	err := helper.Send(buildMCPacket([]byte{0x00, 0x00}, helper.GetIP(), helper.GetPort(), 0x01).GetBuffer())
 	if err != nil {
-		return Response{}, err
+		return api.Response{}, err
 	}
 
 	err = helper.Send(buildMCPacket(0x00).GetBuffer())
 	if err != nil {
-		return Response{}, err
+		return api.Response{}, err
 	}
 
 	responsePacket, err := helper.Receive()
 	if err != nil {
-		return Response{}, err
+		return api.Response{}, err
 	}
 
 	packetLength := responsePacket.ReadVarint()
 	packetId := responsePacket.ReadVarint()
 	if packetId != 0 {
-		return Response{}, errors.New("received something else than a status response")
+		return api.Response{}, errors.New("received something else than a status response")
 	}
 
 	if packetId > packetLength {
@@ -119,14 +121,14 @@ func (mc MinecraftTCP) Execute(helper NetworkHelper) (Response, error) {
 	raw := MinecraftTCPRaw{}
 	err = json.Unmarshal([]byte(jsonBody), &raw)
 	if err != nil {
-		return Response{}, err
+		return api.Response{}, err
 	}
 
 	if responsePacket.IsInvalid() {
-		return Response{}, errors.New("received packet is invalid")
+		return api.Response{}, errors.New("received packet is invalid")
 	}
 
-	return Response{
+	return api.Response{
 		Raw: raw,
 	}, nil
 }

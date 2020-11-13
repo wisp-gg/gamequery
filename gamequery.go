@@ -2,28 +2,22 @@ package gamequery
 
 import (
 	"errors"
-	"github.com/wisp-gg/gamequery/protocols"
+	"github.com/wisp-gg/gamequery/api"
+	"github.com/wisp-gg/gamequery/internal"
+	"github.com/wisp-gg/gamequery/internal/protocols"
 	"sort"
 	"sync"
 	"time"
 )
 
-// Representation of a query request for a specific game server.
-type Request struct {
-	Game    string         // The game protocol to use, can be left out for the `Detect` function.
-	IP      string         // The game server's query IP
-	Port    uint16         // The game server's query port
-	Timeout *time.Duration // Timeout for a single send/receive operation in the game's protocol.
-}
-
-var queryProtocols = []protocols.Protocol{
+var queryProtocols = []internal.Protocol{
 	protocols.SourceQuery{},
 	protocols.MinecraftUDP{},
 	protocols.MinecraftTCP{},
 }
 
-func findProtocols(name string) []protocols.Protocol {
-	found := make([]protocols.Protocol, 0)
+func findProtocols(name string) []internal.Protocol {
+	found := make([]internal.Protocol, 0)
 	for _, protocol := range queryProtocols {
 		if protocol.Name() == name {
 			found = append(found, protocol)
@@ -43,35 +37,35 @@ type queryResult struct {
 	Name     string
 	Priority uint16
 	Err      error
-	Response protocols.Response
+	Response api.Response
 }
 
 // Query the game server by detecting the protocol (trying all available protocols).
 // This usually should be used as the initial query function and then use `Query` function
 // with the returned protocol if the query succeeds. Otherwise each function call will take always
 // <req.Timeout> duration even if the response was received earlier from one of the protocols.
-func Detect(req Request) (protocols.Response, string, error) {
+func Detect(req api.Request) (api.Response, string, error) {
 	return query(req, queryProtocols)
 }
 
 // Query the game server using the protocol provided in req.Game.
-func Query(req Request) (protocols.Response, error) {
+func Query(req api.Request) (api.Response, error) {
 	chosenProtocols := findProtocols(req.Game)
 	if len(chosenProtocols) < 1 {
-		return protocols.Response{}, errors.New("could not find protocols for the game")
+		return api.Response{}, errors.New("could not find protocols for the game")
 	}
 
 	response, _, err := query(req, chosenProtocols)
 	return response, err
 }
 
-func query(req Request, chosenProtocols []protocols.Protocol) (protocols.Response, string, error) {
+func query(req api.Request, chosenProtocols []internal.Protocol) (api.Response, string, error) {
 	var wg sync.WaitGroup
 	wg.Add(len(chosenProtocols))
 
 	queryResults := make([]queryResult, len(chosenProtocols))
 	for index, queryProtocol := range chosenProtocols {
-		go func(queryProtocol protocols.Protocol, index int) {
+		go func(queryProtocol internal.Protocol, index int) {
 			defer wg.Done()
 
 			var port = queryProtocol.DefaultPort()
@@ -84,12 +78,12 @@ func query(req Request, chosenProtocols []protocols.Protocol) (protocols.Respons
 				timeout = *req.Timeout
 			}
 
-			networkHelper := protocols.NetworkHelper{}
+			networkHelper := internal.NetworkHelper{}
 			if err := networkHelper.Initialize(queryProtocol.Network(), req.IP, port, timeout); err != nil {
 				queryResults[index] = queryResult{
 					Priority: queryProtocol.Priority(),
 					Err:      err,
-					Response: protocols.Response{},
+					Response: api.Response{},
 				}
 				return
 			}
@@ -100,7 +94,7 @@ func query(req Request, chosenProtocols []protocols.Protocol) (protocols.Respons
 				queryResults[index] = queryResult{
 					Priority: queryProtocol.Priority(),
 					Err:      err,
-					Response: protocols.Response{},
+					Response: api.Response{},
 				}
 				return
 			}
@@ -130,5 +124,5 @@ func query(req Request, chosenProtocols []protocols.Protocol) (protocols.Respons
 		}
 	}
 
-	return protocols.Response{}, "", firstError
+	return api.Response{}, "", firstError
 }

@@ -3,6 +3,8 @@ package protocols
 import (
 	"encoding/binary"
 	"errors"
+	"github.com/wisp-gg/gamequery/api"
+	"github.com/wisp-gg/gamequery/internal"
 	"sort"
 )
 
@@ -66,7 +68,7 @@ type partialPacket struct {
 	Data   []byte
 }
 
-func (sq SourceQuery) handleMultiplePackets(helper NetworkHelper, initialPacket Packet) (Packet, error) {
+func (sq SourceQuery) handleMultiplePackets(helper internal.NetworkHelper, initialPacket internal.Packet) (internal.Packet, error) {
 	var initial = true
 	var curPacket = initialPacket
 	var packets []partialPacket
@@ -77,14 +79,14 @@ func (sq SourceQuery) handleMultiplePackets(helper NetworkHelper, initialPacket 
 			var err error
 			curPacket, err = helper.Receive()
 			if err != nil {
-				return Packet{}, err
+				return internal.Packet{}, err
 			}
 
 			curPacket.SetOrder(binary.LittleEndian)
 		}
 
 		if curPacket.ReadInt32() != -2 {
-			return Packet{}, errors.New("received packet isn't part of split response")
+			return internal.Packet{}, errors.New("received packet isn't part of split response")
 		}
 
 		// For the sake of simplicity, we'll assume that the server is Source based instead of possibly Goldsource.
@@ -107,7 +109,7 @@ func (sq SourceQuery) handleMultiplePackets(helper NetworkHelper, initialPacket 
 		})
 
 		if curPacket.IsInvalid() {
-			return Packet{}, errors.New("split packet response was malformed")
+			return internal.Packet{}, errors.New("split packet response was malformed")
 		}
 
 		if len(packets) == int(total) {
@@ -119,7 +121,7 @@ func (sq SourceQuery) handleMultiplePackets(helper NetworkHelper, initialPacket 
 		return packets[i].Number < packets[j].Number
 	})
 
-	packet := Packet{}
+	packet := internal.Packet{}
 	packet.SetOrder(binary.LittleEndian)
 	for _, partial := range packets {
 		packet.WriteRaw(partial.Data...)
@@ -128,7 +130,7 @@ func (sq SourceQuery) handleMultiplePackets(helper NetworkHelper, initialPacket 
 	if compressed {
 		// TODO: Handle decompression (only engines from ~2006-era seem to implement this)
 
-		return Packet{}, errors.New("received packet that is bz2 compressed (" + string(decompressedSize) + ", " + string(crc32) + ")")
+		return internal.Packet{}, errors.New("received packet that is bz2 compressed (" + string(decompressedSize) + ", " + string(crc32) + ")")
 	}
 
 	// The constructed packet will resemble the simple response format, so we need to get rid of
@@ -138,19 +140,19 @@ func (sq SourceQuery) handleMultiplePackets(helper NetworkHelper, initialPacket 
 	return packet, nil
 }
 
-func (sq SourceQuery) Execute(helper NetworkHelper) (Response, error) {
-	packet := Packet{}
+func (sq SourceQuery) Execute(helper internal.NetworkHelper) (api.Response, error) {
+	packet := internal.Packet{}
 	packet.WriteRaw(0xFF, 0xFF, 0xFF, 0xFF, 0x54)
 	packet.WriteString("Source Engine Query")
 	packet.WriteRaw(0x00)
 
 	if err := helper.Send(packet.GetBuffer()); err != nil {
-		return Response{}, err
+		return api.Response{}, err
 	}
 
 	packet, err := helper.Receive()
 	if err != nil {
-		return Response{}, err
+		return api.Response{}, err
 	}
 
 	packet.SetOrder(binary.LittleEndian)
@@ -160,12 +162,12 @@ func (sq SourceQuery) Execute(helper NetworkHelper) (Response, error) {
 
 		packet, err = sq.handleMultiplePackets(helper, packet)
 		if err != nil {
-			return Response{}, err
+			return api.Response{}, err
 		}
 	}
 
 	if packet.ReadUint8() != 0x49 {
-		return Response{}, errors.New("received packet isn't a response to A2S_INFO")
+		return api.Response{}, errors.New("received packet isn't a response to A2S_INFO")
 	}
 
 	raw := A2SInfo{
@@ -185,7 +187,7 @@ func (sq SourceQuery) Execute(helper NetworkHelper) (Response, error) {
 	}
 
 	if raw.ID == 2420 {
-		return Response{}, errors.New("detected The Ship response, unsupported")
+		return api.Response{}, errors.New("detected The Ship response, unsupported")
 	}
 
 	raw.Version = packet.ReadString()
@@ -219,10 +221,10 @@ func (sq SourceQuery) Execute(helper NetworkHelper) (Response, error) {
 	}
 
 	if packet.IsInvalid() {
-		return Response{}, errors.New("received packet is invalid")
+		return api.Response{}, errors.New("received packet is invalid")
 	}
 
-	return Response{
+	return api.Response{
 		Raw: raw,
 	}, nil
 }

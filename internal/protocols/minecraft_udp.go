@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"github.com/wisp-gg/gamequery/api"
+	"github.com/wisp-gg/gamequery/internal"
 	"math/rand"
 	"strconv"
 	"time"
@@ -68,36 +70,36 @@ func parseChallengeToken(challengeToken string) ([]byte, error) {
 	return buf.Bytes()[buf.Len()-4:], nil
 }
 
-func (mc MinecraftUDP) Execute(helper NetworkHelper) (Response, error) {
+func (mc MinecraftUDP) Execute(helper internal.NetworkHelper) (api.Response, error) {
 	sessionId := generateSessionID()
 
-	packet := Packet{}
+	packet := internal.Packet{}
 	packet.SetOrder(binary.BigEndian)
 	packet.WriteRaw(0xFE, 0xFD, 0x09)
 	packet.WriteInt32(sessionId)
 
 	err := helper.Send(packet.GetBuffer())
 	if err != nil {
-		return Response{}, err
+		return api.Response{}, err
 	}
 
 	handshakePacket, err := helper.Receive()
 	if err != nil {
-		return Response{}, err
+		return api.Response{}, err
 	}
 
 	handshakePacket.SetOrder(binary.BigEndian)
 	if handshakePacket.ReadUint8() != 0x09 {
-		return Response{}, errors.New("sent a handshake, but didn't receive handshake response back")
+		return api.Response{}, errors.New("sent a handshake, but didn't receive handshake response back")
 	}
 
 	if handshakePacket.ReadInt32() != sessionId {
-		return Response{}, errors.New("received handshake for wrong session id")
+		return api.Response{}, errors.New("received handshake for wrong session id")
 	}
 
 	challengeToken, err := parseChallengeToken(handshakePacket.ReadString())
 	if err != nil {
-		return Response{}, err
+		return api.Response{}, err
 	}
 
 	packet.Clear()
@@ -108,21 +110,21 @@ func (mc MinecraftUDP) Execute(helper NetworkHelper) (Response, error) {
 
 	err = helper.Send(packet.GetBuffer())
 	if err != nil {
-		return Response{}, err
+		return api.Response{}, err
 	}
 
 	responsePacket, err := helper.Receive()
 	if err != nil {
-		return Response{}, err
+		return api.Response{}, err
 	}
 
 	responsePacket.SetOrder(binary.BigEndian)
 	if responsePacket.ReadUint8() != 0x00 {
-		return Response{}, errors.New("sent a full stat request, but didn't receive stat response back")
+		return api.Response{}, errors.New("sent a full stat request, but didn't receive stat response back")
 	}
 
 	if responsePacket.ReadInt32() != sessionId {
-		return Response{}, errors.New("received handshake for wrong session id")
+		return api.Response{}, errors.New("received handshake for wrong session id")
 	}
 
 	responsePacket.Forward(11)
@@ -175,10 +177,10 @@ func (mc MinecraftUDP) Execute(helper NetworkHelper) (Response, error) {
 	}
 
 	if responsePacket.IsInvalid() {
-		return Response{}, errors.New("received packet is invalid")
+		return api.Response{}, errors.New("received packet is invalid")
 	}
 
-	return Response{
+	return api.Response{
 		Raw: raw,
 	}, nil
 }
