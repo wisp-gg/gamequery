@@ -3,7 +3,7 @@ package protocols
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
+	"sort"
 )
 
 type SourceQuery struct{}
@@ -57,20 +57,28 @@ func (sq SourceQuery) Network() string {
 	return "udp"
 }
 
+type partialPacket struct {
+	ID     int32
+	Number int8
+	Size   uint16
+	Data   []byte
+}
+
 func (sq SourceQuery) handleMultiplePackets(helper NetworkHelper, initialPacket Packet) (Packet, error) {
 	var initial = true
 	var curPacket = initialPacket
-	var packets []Packet
+	var packets []partialPacket
+	var compressed = false
+	var decompressedSize, crc32 int32 = 0, 0
 	for {
 		if !initial {
-			curPacket, err := helper.Receive()
+			var err error
+			curPacket, err = helper.Receive()
 			if err != nil {
 				return Packet{}, err
 			}
 
 			curPacket.SetOrder(binary.LittleEndian)
-		} else {
-			initial = false
 		}
 
 		if curPacket.ReadInt32() != -2 {
@@ -79,30 +87,53 @@ func (sq SourceQuery) handleMultiplePackets(helper NetworkHelper, initialPacket 
 
 		// For the sake of simplicity, we'll assume that the server is Source based instead of possibly Goldsource.
 		id, total, number, size := curPacket.ReadInt32(), curPacket.ReadInt8(), curPacket.ReadInt8(), curPacket.ReadUint16()
-		compressed := id & 0x80
+		if initial {
+			compressed = uint32(id)&0x80000000 != 0
 
-		if compressed != 0 {
-			decompressedSize, crc32 := curPacket.ReadInt32(), curPacket.ReadInt32()
-			fmt.Println(decompressedSize, crc32)
+			if compressed {
+				decompressedSize, crc32 = curPacket.ReadInt32(), curPacket.ReadInt32()
+			}
 
-			// TODO: Handle decompression
-			return Packet{}, errors.New("received packet that is bz2 compressed")
+			initial = false
 		}
 
-		packets = append(packets, curPacket)
-		fmt.Println(id, total, number, size, compressed)
-		fmt.Println(len(packets), int(total))
+		packets = append(packets, partialPacket{
+			ID:     id,
+			Number: number,
+			Size:   size,
+			Data:   curPacket.ReadRest(),
+		})
+
+		if curPacket.IsInvalid() {
+			return Packet{}, errors.New("split packet response was malformed")
+		}
+
 		if len(packets) == int(total) {
 			break
 		}
 	}
 
-	fmt.Println("Finished reading all the packets!")
+	sort.Slice(packets, func(i, j int) bool {
+		return packets[i].Number < packets[j].Number
+	})
 
-	// TODO: Reconstruct the order (by just sorting `packets`)
-	// Then build a new buffer into a Packet{} struct and pass it back.
+	packet := Packet{}
+	packet.SetOrder(binary.LittleEndian)
+	for _, partial := range packets {
+		packet.WriteRaw(partial.Data...)
+	}
 
-	return Packet{}, errors.New("unimplemented split response handling (please let me know the server IP so I can implement this)")
+	if compressed {
+		// TODO: Handle decompression (only engines from ~2006-era seem to implement this)
+
+		return Packet{}, errors.New("received packet that is bz2 compressed (" + string(decompressedSize) + ", " + string(crc32) + ")")
+	}
+
+	// The constructed packet will resemble the simple response format, so we need to get rid of
+	// the FF FF FF FF prefix (as we'll return to logic after the initial header reading).
+	packet.ReadInt32()
+
+	return packet, nil
 }
 
 func (sq SourceQuery) Execute(helper NetworkHelper) (Response, error) {

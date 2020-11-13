@@ -155,6 +155,18 @@ func (p *Packet) ReadString() string {
 	return string(str)
 }
 
+func (p *Packet) ReadRest() []byte {
+	if p.ReachedEnd() {
+		p.invalid = true
+		return []byte{}
+	}
+
+	res := p.buffer[p.pos:p.Length()]
+	p.pos = p.Length()
+
+	return res
+}
+
 func (p *Packet) CanRead(bytes int) bool {
 	return p.pos+bytes <= p.Length()
 }
