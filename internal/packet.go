@@ -189,6 +189,10 @@ func (p *Packet) GetBuffer() []byte {
 
 func (p *Packet) Forward(count int) {
 	p.pos += count
+
+	if p.pos < 0 {
+		p.pos = 0
+	}
 }
 
 func (p *Packet) Clear() {
