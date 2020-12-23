@@ -1,7 +1,9 @@
 package internal
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net"
 	"time"
 )
@@ -55,14 +57,26 @@ func (helper *NetworkHelper) Receive() (Packet, error) {
 		return Packet{}, err
 	}
 
-	recvBuffer := make([]byte, readBufSize)
-	recvSize, err := helper.conn.Read(recvBuffer)
-	if err != nil {
-		return Packet{}, err
+	var res = &bytes.Buffer{}
+	for {
+		recvBuffer := make([]byte, readBufSize)
+		recvSize, err := helper.conn.Read(recvBuffer)
+
+		if recvSize > 0 {
+			res.Write(recvBuffer[:recvSize])
+		}
+
+		if err == io.EOF || recvSize < readBufSize {
+			break
+		}
+
+		if err != nil {
+			return Packet{}, err
+		}
 	}
 
 	packet := Packet{}
-	packet.SetBuffer(recvBuffer[:recvSize])
+	packet.SetBuffer(res.Bytes())
 
 	return packet, nil
 }

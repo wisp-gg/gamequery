@@ -115,17 +115,16 @@ func (mc MinecraftTCP) Execute(helper internal.NetworkHelper) (api.Response, err
 	}
 
 	responsePacket.ReadVarint() // Actual JSON strings' length (unneeded with ReadString)
-
 	jsonBody := responsePacket.ReadString()
+
+	if responsePacket.IsInvalid() {
+		return api.Response{}, errors.New("received packet is invalid")
+	}
 
 	raw := MinecraftTCPRaw{}
 	err = json.Unmarshal([]byte(jsonBody), &raw)
 	if err != nil {
 		return api.Response{}, err
-	}
-
-	if responsePacket.IsInvalid() {
-		return api.Response{}, errors.New("received packet is invalid")
 	}
 
 	return api.Response{

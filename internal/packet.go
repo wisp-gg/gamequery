@@ -172,7 +172,7 @@ func (p *Packet) CanRead(bytes int) bool {
 }
 
 func (p *Packet) ReachedEnd() bool {
-	return !p.CanRead(0)
+	return !p.CanRead(1)
 }
 
 func (p *Packet) SetOrder(order binary.ByteOrder) {
