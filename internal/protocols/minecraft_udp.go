@@ -13,20 +13,6 @@ import (
 
 type MinecraftUDP struct{}
 
-type MinecraftUDPRaw struct {
-	Hostname   string
-	GameType   string
-	GameID     string
-	Version    string
-	Plugins    string
-	Map        string
-	NumPlayers uint16
-	MaxPlayers uint16
-	HostPort   uint16
-	HostIP     string
-	Players    []string
-}
-
 func (mc MinecraftUDP) Name() string {
 	return "minecraft_udp"
 }
@@ -129,7 +115,7 @@ func (mc MinecraftUDP) Execute(helper internal.NetworkHelper) (api.Response, err
 
 	responsePacket.Forward(11)
 
-	raw := MinecraftUDPRaw{}
+	raw := api.MinecraftUDPRaw{}
 	for {
 		key := responsePacket.ReadString()
 		if key == "" {

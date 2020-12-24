@@ -11,33 +11,6 @@ import (
 
 type MinecraftTCP struct{}
 
-type MinecraftTCPVersion struct {
-	Name     string
-	Protocol int
-}
-
-type MinecraftTCPPlayer struct {
-	Name string
-	ID   string
-}
-
-type MinecraftTCPPlayers struct {
-	Max    int
-	Online int
-	Sample []MinecraftTCPPlayer
-}
-
-type MinecraftTCPDescription struct {
-	Text string
-}
-
-type MinecraftTCPRaw struct {
-	Version     MinecraftTCPVersion
-	Players     MinecraftTCPPlayers
-	Description MinecraftTCPDescription
-	Favicon     string
-}
-
 func (mc MinecraftTCP) Name() string {
 	return "minecraft_tcp"
 }
@@ -121,7 +94,7 @@ func (mc MinecraftTCP) Execute(helper internal.NetworkHelper) (api.Response, err
 		return api.Response{}, errors.New("received packet is invalid")
 	}
 
-	raw := MinecraftTCPRaw{}
+	raw := api.MinecraftTCPRaw{}
 	err = json.Unmarshal([]byte(jsonBody), &raw)
 	if err != nil {
 		return api.Response{}, err

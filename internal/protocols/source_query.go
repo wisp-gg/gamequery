@@ -10,37 +10,6 @@ import (
 
 type SourceQuery struct{}
 
-type ExtraData struct {
-	Port         uint16
-	SteamID      uint64
-	SourceTVPort uint16
-	SourceTVName string
-	Keywords     string
-	GameID       uint64
-}
-
-type A2SInfo struct {
-	Protocol    uint8
-	Name        string
-	Map         string
-	Folder      string
-	Game        string
-	ID          uint16
-	Players     uint8
-	MaxPlayers  uint8
-	Bots        uint8
-	ServerType  uint8
-	Environment uint8
-	Visibility  uint8
-	VAC         uint8
-
-	// The Ship
-
-	Version   string
-	EDF       uint8
-	ExtraData ExtraData
-}
-
 func (sq SourceQuery) Name() string {
 	return "source"
 }
@@ -170,7 +139,7 @@ func (sq SourceQuery) Execute(helper internal.NetworkHelper) (api.Response, erro
 		return api.Response{}, errors.New("received packet isn't a response to A2S_INFO")
 	}
 
-	raw := A2SInfo{
+	raw := api.SourceQuery_A2SInfo{
 		Protocol:    packet.ReadUint8(),
 		Name:        packet.ReadString(),
 		Map:         packet.ReadString(),
@@ -195,7 +164,7 @@ func (sq SourceQuery) Execute(helper internal.NetworkHelper) (api.Response, erro
 	if !packet.ReachedEnd() {
 		raw.EDF = packet.ReadUint8()
 
-		extraData := ExtraData{}
+		extraData := api.SourceQuery_ExtraData{}
 		if (raw.EDF & 0x80) != 0 {
 			extraData.Port = packet.ReadUint16()
 		}
