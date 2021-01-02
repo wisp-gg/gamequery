@@ -10,9 +10,17 @@ type Request struct {
 	Timeout *time.Duration // Timeout for a single send/receive operation in the game's protocol.
 }
 
-// Representation of a query result for a specific game server.
+// Player information of the server
+type PlayersResponse struct {
+	Current int      // The amount of players currently on the server
+	Max     int      // The amount of players the server can hold
+	Names   []string // List of player names on the server, could be partial (so that the length of Names =/= Current)
+}
+
+// Representation of a query result for a specific game server. All of the fields are guaranteed to be present (other than the contents of Raw).
 type Response struct {
-	// TODO: Decide the structure of this
+	Name    string          // The server name
+	Players PlayersResponse // Player information of the server
 
 	Raw interface{} // Contains the original, raw response received from the game's protocol.
 }
@@ -83,4 +91,12 @@ type SourceQuery_A2SInfo struct {
 	Version   string
 	EDF       uint8
 	ExtraData SourceQuery_ExtraData
+}
+
+// Single A2S_PLAYER query's player response
+type SourceQuery_A2SPlayer struct {
+	Index    uint8
+	Name     string
+	Score    int32
+	Duration float32
 }

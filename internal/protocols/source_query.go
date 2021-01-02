@@ -3,6 +3,7 @@ package protocols
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/wisp-gg/gamequery/api"
 	"github.com/wisp-gg/gamequery/internal"
 	"sort"
@@ -109,34 +110,74 @@ func (sq SourceQuery) handleMultiplePackets(helper internal.NetworkHelper, initi
 	return packet, nil
 }
 
-func (sq SourceQuery) Execute(helper internal.NetworkHelper) (api.Response, error) {
-	packet := internal.Packet{}
-	packet.WriteRaw(0xFF, 0xFF, 0xFF, 0xFF, 0x54)
-	packet.WriteString("Source Engine Query")
-	packet.WriteRaw(0x00)
+func (sq SourceQuery) handleReceivedPacket(helper internal.NetworkHelper, packet internal.Packet) (internal.Packet, error) {
+	packetType := packet.ReadInt32()
+	if packetType == -1 {
+		return packet, nil
+	}
 
-	if err := helper.Send(packet.GetBuffer()); err != nil {
-		return api.Response{}, err
+	if packetType == -2 {
+		packet.Forward(-4) // Seek back so we're able to reread the data in handleMultiplePackets
+
+		return sq.handleMultiplePackets(helper, packet)
+	}
+
+	return internal.Packet{}, errors.New(fmt.Sprintf("unable to handle unknown packet type %d", packetType))
+}
+
+func (sq SourceQuery) request(helper internal.NetworkHelper, requestPacket internal.Packet, wantedId uint8, allowChallengeRequest bool) (internal.Packet, error) {
+	if err := helper.Send(requestPacket.GetBuffer()); err != nil {
+		return internal.Packet{}, err
 	}
 
 	packet, err := helper.Receive()
 	if err != nil {
-		return api.Response{}, err
+		return internal.Packet{}, err
 	}
 
 	packet.SetOrder(binary.LittleEndian)
-
-	if packet.ReadInt32() != -1 {
-		packet.Forward(-4) // Seek back so we're able to reread the data in handleMultiplePackets
-
-		packet, err = sq.handleMultiplePackets(helper, packet)
-		if err != nil {
-			return api.Response{}, err
-		}
+	packet, err = sq.handleReceivedPacket(helper, packet)
+	if err != nil {
+		return internal.Packet{}, err
 	}
 
-	if packet.ReadUint8() != 0x49 {
-		return api.Response{}, errors.New("received packet isn't a response to A2S_INFO")
+	responseType := packet.ReadUint8()
+	if responseType == wantedId {
+		return packet, nil
+	}
+
+	if responseType != 0x41 {
+		return internal.Packet{}, errors.New(fmt.Sprintf("unable to handle unknown response type %d", responseType))
+	}
+
+	// If a challenge response fails, the game may respond with another challenge.
+	// To avoid a recursive loop, we explicitly disallow requesting new challenges after
+	// a single challenge request has been done (initial request).
+	if !allowChallengeRequest {
+		return internal.Packet{}, errors.New("unable to handle response due to disallowing challenge requests")
+	}
+
+	challengedRequest := internal.Packet{}
+	challengedRequest.SetOrder(binary.LittleEndian)
+	challengedRequest.WriteInt32(requestPacket.ReadInt32())
+	challengedRequest.WriteUint8(requestPacket.ReadUint8())
+	challengedRequest.WriteInt32(packet.ReadInt32())
+
+	return sq.request(helper, challengedRequest, wantedId, false)
+}
+
+func (sq SourceQuery) Execute(helper internal.NetworkHelper) (api.Response, error) {
+	requestPacket := internal.Packet{}
+	requestPacket.SetOrder(binary.LittleEndian)
+
+	// A2S_INFO request
+	requestPacket.WriteRaw(0xFF, 0xFF, 0xFF, 0xFF, 0x54)
+	requestPacket.WriteString("Source Engine Query")
+	requestPacket.WriteRaw(0x00)
+
+	packet, err := sq.request(helper, requestPacket, 0x49, true)
+	if err != nil {
+		return api.Response{}, err
 	}
 
 	raw := api.SourceQuery_A2SInfo{
@@ -193,7 +234,47 @@ func (sq SourceQuery) Execute(helper internal.NetworkHelper) (api.Response, erro
 		return api.Response{}, errors.New("received packet is invalid")
 	}
 
+	// Attempt to additionally get info from A2S_PLAYER (as it contains player names)
+	// Though if this fails, just fail silently as it's acceptable for that information to be missing
+	// and it's better than having no info at all.
+	//
+	// Depending on the game type, it may also just stop responding to A2S_PLAYER due to too many players.
+	requestPacket.Clear()
+	requestPacket.WriteRaw(0xFF, 0xFF, 0xFF, 0xFF, 0x55, 0xFF, 0xFF, 0xFF, 0xFF)
+
+	packet, err = sq.request(helper, requestPacket, 0x44, true)
+	var playerList []string
+	if err == nil {
+		packet.ReadUint8() // Number of players we received information for
+
+		for {
+			player := api.SourceQuery_A2SPlayer{
+				Index:    packet.ReadUint8(),
+				Name:     packet.ReadString(),
+				Score:    packet.ReadInt32(),
+				Duration: packet.ReadFloat32(),
+			}
+
+			if packet.IsInvalid() {
+				break
+			}
+
+			playerList = append(playerList, player.Name)
+
+			if packet.ReachedEnd() {
+				break
+			}
+		}
+	}
+
 	return api.Response{
+		Name: raw.Name,
+		Players: api.PlayersResponse{
+			Current: int(raw.Players),
+			Max:     int(raw.MaxPlayers),
+			Names:   playerList,
+		},
+
 		Raw: raw,
 	}, nil
 }

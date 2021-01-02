@@ -51,7 +51,7 @@ func buildMCPacket(bulkData ...interface{}) *internal.Packet {
 		case []byte:
 			tmpPacket.WriteRaw(val...)
 		default:
-			fmt.Printf("unhandled %s\n", val)
+			fmt.Printf("gamequery: unhandled type %s for Minecraft TCP packet, ignoring...\n", val)
 		}
 	}
 
@@ -100,7 +100,19 @@ func (mc MinecraftTCP) Execute(helper internal.NetworkHelper) (api.Response, err
 		return api.Response{}, err
 	}
 
+	var playerList []string
+	for _, player := range raw.Players.Sample {
+		playerList = append(playerList, player.Name)
+	}
+
 	return api.Response{
+		Name: raw.Version.Name,
+		Players: api.PlayersResponse{
+			Current: raw.Players.Online,
+			Max:     raw.Players.Max,
+			Names:   playerList,
+		},
+
 		Raw: raw,
 	}, nil
 }

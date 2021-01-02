@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/binary"
+	"math"
 )
 
 type Packet struct {
@@ -60,28 +61,14 @@ func (p *Packet) WriteString(str string) {
 	p.WriteRaw([]byte(str)...)
 }
 
-func (p *Packet) ReadInt8() int8 {
-	if !p.CanRead(1) {
-		p.invalid = true
-		return 0
-	}
-
-	r := int8(p.buffer[p.pos])
-	p.pos += 1
-
-	return r
-}
-
-func (p *Packet) ReadInt32() int32 {
+func (p *Packet) ReadFloat32() float32 {
 	if !p.CanRead(4) {
 		p.invalid = true
 		return 0
 	}
 
-	r := int32(p.order.Uint32(p.buffer[p.pos : p.pos+4]))
-	p.pos += 4
-
-	return r
+	r := p.ReadUint32()
+	return math.Float32frombits(r)
 }
 
 func (p *Packet) ReadUint8() uint8 {
@@ -108,6 +95,18 @@ func (p *Packet) ReadUint16() uint16 {
 	return r
 }
 
+func (p *Packet) ReadUint32() uint32 {
+	if !p.CanRead(4) {
+		p.invalid = true
+		return 0
+	}
+
+	r := p.order.Uint32(p.buffer[p.pos : p.pos+4])
+	p.pos += 4
+
+	return r
+}
+
 func (p *Packet) ReadUint64() uint64 {
 	if !p.CanRead(8) {
 		p.invalid = true
@@ -118,6 +117,14 @@ func (p *Packet) ReadUint64() uint64 {
 	p.pos += 8
 
 	return r
+}
+
+func (p *Packet) ReadInt8() int8 {
+	return int8(p.ReadUint8())
+}
+
+func (p *Packet) ReadInt32() int32 {
+	return int32(p.ReadUint32())
 }
 
 func (p *Packet) ReadVarint() int {

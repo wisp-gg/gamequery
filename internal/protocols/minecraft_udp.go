@@ -167,6 +167,13 @@ func (mc MinecraftUDP) Execute(helper internal.NetworkHelper) (api.Response, err
 	}
 
 	return api.Response{
+		Name: raw.Hostname,
+		Players: api.PlayersResponse{
+			Current: int(raw.NumPlayers),
+			Max:     int(raw.MaxPlayers),
+			Names:   raw.Players,
+		},
+
 		Raw: raw,
 	}, nil
 }

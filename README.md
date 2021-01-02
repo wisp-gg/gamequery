@@ -1,4 +1,4 @@
-# gamequery
+# gamequery [![GoDoc](https://godoc.org/wisp-gg/gamequery?status.svg)](https://godoc.org/github.com/wisp-gg/gamequery)
 A Golang package for querying game servers  
 
 ## Supported protocols:
@@ -29,3 +29,6 @@ func main() {
 	fmt.Printf("%+v\n", res)
 }
 ```
+
+NOTE: Ideally, you'd only want to use `gamequery.Detect` only once (or until one successful response), and then use `gamequery.Query` with the protocol provided.
+Otherwise, each `gamequery.Detect` call will try to query the game server with _all_ possible protocols.
