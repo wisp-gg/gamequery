@@ -66,12 +66,16 @@ func (helper *NetworkHelper) Receive() (Packet, error) {
 			res.Write(recvBuffer[:recvSize])
 		}
 
-		if err == io.EOF || recvSize < readBufSize {
-			break
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			return Packet{}, err
 		}
 
-		if err != nil {
-			return Packet{}, err
+		if recvSize < readBufSize {
+			break
 		}
 	}
 

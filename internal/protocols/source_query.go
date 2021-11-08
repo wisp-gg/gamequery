@@ -161,6 +161,8 @@ func (sq SourceQuery) request(helper internal.NetworkHelper, requestPacket inter
 	challengedRequest.SetOrder(binary.LittleEndian)
 	challengedRequest.WriteInt32(requestPacket.ReadInt32())
 	challengedRequest.WriteUint8(requestPacket.ReadUint8())
+	challengedRequest.WriteString("Source Engine Query")
+	challengedRequest.WriteRaw(0x00)
 	challengedRequest.WriteInt32(packet.ReadInt32())
 
 	return sq.request(helper, challengedRequest, wantedId, false)
